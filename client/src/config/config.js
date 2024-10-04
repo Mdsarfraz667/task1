@@ -1,2 +1,2 @@
-const BASE_URL = "https://task1-backend-vs0n.onrender.com";
+const BASE_URL = "http://localhost:4000/api/v1";
 export default BASE_URL;
