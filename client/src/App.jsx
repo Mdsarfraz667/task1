@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import BASE_URL from "./config/config";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
 import "./App.css";
+import validateFormUtility from "./utility/FormValidation";
+
 const App = () => {
   const [formData, setFormData] = useState({
     firstName: "",
@@ -22,24 +24,10 @@ const App = () => {
 
   const [showUsers, setShowUsers] = useState(false);
 
+  // create const form ref for start the form position
+  const formRef = useRef(null);
+
   // Form validation
-  const validateForm = () => {
-    const { firstName, lastName, phoneNumber, email, address } = formData;
-    if (!firstName || !lastName || !phoneNumber || !email || !address) {
-      setError("All fields are required.");
-      return false;
-    }
-    if (!email.includes("@gmail.com")) {
-      setError("Email must include @gmail.com.");
-      return false;
-    }
-    if (phoneNumber.length !== 10) {
-      setError("Phone number must be 10 digits.");
-      return false;
-    }
-    setError("");
-    return true;
-  };
 
   // Handle input change
   const handleInputChange = (e) => {
@@ -64,7 +52,12 @@ const App = () => {
 
   // Create user
   const createUser = async () => {
-    if (!validateForm()) return;
+    const errMessage = validateFormUtility(formData);
+
+    if (errMessage) {
+      toast.error(errMessage);
+      return;
+    }
 
     try {
       const response = await axios.post(`${BASE_URL}/users`, {
@@ -75,18 +68,15 @@ const App = () => {
         address: formData.address,
       });
       console.log("response", response);
-      setUsers([...users, response.data.data]);
+      setUsers((prevUsers) => [response.data.data, ...prevUsers]);
       toast.success("User added successfully!");
       setSuccessMessage("User added successfully!");
       resetForm();
     } catch (err) {
-      if (err.response && err.response.status === 400) {
+      if (err.response && err.response.status === 409) {
         // Handle user already exists case
-        setError(err.response.data.message);
         toast.error(err.response.data.message);
       } else {
-        console.error("Error creating user:", err);
-        setError("An error occurred while creating the user.");
         toast.error("An error occurred while creating the user.");
       }
     }
@@ -94,8 +84,12 @@ const App = () => {
 
   // Update user (PUT)
   const updateUser = async (id) => {
-    if (!validateForm()) return;
-    console.log("formData", formData);
+    const errMessage = validateFormUtility(formData);
+
+    if (errMessage) {
+      toast.error(errMessage);
+      return;
+    }
     try {
       const response = await axios.patch(`${BASE_URL}/users/${id}`, formData);
       const updatedUsers = users.map((user) =>
@@ -105,8 +99,7 @@ const App = () => {
       toast.success("User updated successfully!");
       resetForm();
     } catch (err) {
-      console.error("Error updating user:", err);
-      toast.error("An error occurred while updating the user.");
+      toast.error(err.response.data.message);
     }
   };
 
@@ -142,6 +135,7 @@ const App = () => {
       email: user.email,
       address: user.address,
     });
+    formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     setIsEditing(true);
     setEditUserId(user._id);
   };
@@ -159,8 +153,6 @@ const App = () => {
     setEditUserId(null);
     setIsEditing(false);
     setEditUserId(null);
-    setError("");
-    setSuccessMessage("");
   };
 
   const handleCancel = () => {
@@ -171,16 +163,14 @@ const App = () => {
     setShowUsers(!showUsers);
   };
 
-  console.log("formData", formData);
-
   return (
     <div className="flex flex-col items-center">
       <h1 className="mb-5 text-2xl font-bold">User Form</h1>
-      {error && <p className="text-red-500">{error}</p>}
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white  bg-opacity-80 p-6 rounded-lg shadow-md w-full max-w-md"
+        className="bg-white bg-opacity-80 p-6 rounded-lg shadow-md w-full max-w-md"
+        ref={formRef}
       >
         <input
           type="text"
@@ -246,23 +236,29 @@ const App = () => {
         {showUsers ? "Hide Users" : "Show Users"}
       </button>
 
-      {/* toggle on the basic of showUsers state */}
       {showUsers && (
         <div className="w-full max-w-md">
           <h2 className="mt-10 text-xl font-semibold">User List</h2>
-          <ul className="grid grid-cols-1 gap-4 mt-4">
+          <div className="grid grid-cols-1 gap-4 mt-4">
             {users.map((user) => (
-              <li
+              <div
                 key={user._id}
-                className="bg-white shadow-2xl rounded-lg p-4 flex justify-between items-center transition-all duration-300 transform hover:scale-105"
+                className="bg-white shadow-2xl rounded-lg p-4 transition-all duration-300 transform hover:scale-105"
               >
-                <div>
-                  <h3 className="font-semibold">
-                    {user.firstName} {user.lastName}
-                  </h3>
-                  <p className="text-gray-500">{user.email}</p>
-                </div>
-                <div>
+                <h3 className="font-semibold">
+                  {user.firstName} {user.lastName}
+                </h3>
+                <p className="text-gray-500">
+                  <b>Phone</b>: {user.phoneNumber}
+                </p>
+                <p className="text-gray-500">
+                  <b>Email: </b>
+                  {user.email}
+                </p>
+                <p className="text-gray-500">
+                  <b>Address</b>: {user.address}
+                </p>
+                <div className="mt-2">
                   <button
                     onClick={() => handleEdit(user)}
                     className="bg-yellow-500 text-white py-1 px-2 rounded-md hover:bg-yellow-600 transition mr-2"
@@ -276,12 +272,11 @@ const App = () => {
                     Delete
                   </button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
-
       <ToastContainer
         position="top-center"
         autoClose={2000}
